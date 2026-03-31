@@ -1,42 +1,45 @@
-import pandas as pd
 import json
+import openpyxl
 
-# Load the Excel files
-ref_file = 'chia_compa_cursos_09032026_CierreFebrero2026 (1).xlsx'
-src_file = 'chia_compa_cursos_CierreFeb2026.xlsx'
+class ExcelAnalyzer:
+    def __init__(self, file_path):
+        self.file_path = file_path
+        self.workbook = openpyxl.load_workbook(file_path, data_only=False)
+        self.report = {}
 
-# Read the Excel files
-ref_df = pd.read_excel(ref_file)
-src_df = pd.read_excel(src_file)
+    def analyze(self):
+        self.report['sheets'] = {}  
+        for sheet_name in self.workbook.sheetnames:
+            sheet = self.workbook[sheet_name]
+            self.report['sheets'][sheet_name] = {
+                'formulas': {},
+                'column_properties': {},
+                'hidden_columns': [],
+                'cell_formats': {}
+            }
+            for col in sheet.columns:
+                col_letter = col[0].column_letter
+                col_hidden = sheet.column_dimensions[col_letter].hidden
+                if col_hidden:
+                    self.report['sheets'][sheet_name]['hidden_columns'].append(col_letter)
 
-# Initialize report
-report = {'column_structure': {}, 'formulas': {}, 'hidden_columns': []}
+                col_data = []
+                for cell in col:
+                    col_data.append({
+                        'value': cell.value,
+                        'formula': cell.formula if cell.formula else '',
+                        'format': cell.number_format
+                    })
+                    if cell.formula:
+                        self.report['sheets'][sheet_name]['formulas'][cell.coordinate] = cell.formula
+                self.report['sheets'][sheet_name]['column_properties'][col_letter] = col_data
 
-# Compare column structures
-ref_columns = set(ref_df.columns)
-src_columns = set(src_df.columns)
+    def generate_report(self):
+        return json.dumps(self.report, indent=2)
 
-# Identify missing columns in source and extra columns
-missing_columns = ref_columns - src_columns
-extra_columns = src_columns - ref_columns
-
-# Report column differences
-report['column_structure']['missing_columns'] = list(missing_columns)
-report['column_structure']['extra_columns'] = list(extra_columns)
-
-# Check for formulas and hidden columns
-for col in ref_columns:
-    if col in src_df.columns:
-        # Check if the column is hidden (can be done through some logic based on actual data)
-        hidden = src_df[col].isnull().all()  # Example condition for hidden column
-        if hidden:
-            report['hidden_columns'].append(col)
-
-# Generate JSON report
-json_report = json.dumps(report, indent=4)
-
-# Save the JSON report
-with open('transformation_report.json', 'w') as f:
-    f.write(json_report)
-
-print('Transformation report generated successfully!')
+if __name__ == '__main__':
+    file_path = 'your_excel_file.xlsx'
+    analyzer = ExcelAnalyzer(file_path)
+    analyzer.analyze()
+    report = analyzer.generate_report()
+    print(report)
